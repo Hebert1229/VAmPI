@@ -6,105 +6,123 @@ on:
       - main
 
 jobs:
+  security-scans:
+    name: Run Security Scans
+    runs-on: ubuntu-latest
 
-  run-horusec:
-    name: Run Security Tests
-    runs-on: self-hosted
-    needs: clone-repository
     env:
-      REPORT_PATH: /home/arkad/Reports
-      PROJECT_NAME: "stacy-api"
+      PROJECT_NAME: stacy-api
       BUILD_NUMBER: ${{ github.run_number }}
-      ZAP_TARGET_URL: "https://project.tech/login"
+      REPORT_PATH: reports
+      ZAP_TARGET_URL: https://project.tech/login
+      DEFECTDOJO_HOST: http://localhost:8080
+
     steps:
-      - name: Change Directory
-        working-directory: project-api
-        run: pwd
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Run Horusec
-        working-directory: project-api
-        run: sudo horusec start -p . -o=json -O=$REPORT_PATH/horusec_report/horusec-report-$PROJECT_NAME-$BUILD_NUMBER.json
-
-      - name: Build with Maven
-        working-directory: stacy-api
-        run: mvn clean install -DskipTests=true || true
-
-      - name: Run Snyk Security Scan
-        working-directory: stacy-api
-        run: snyk test --all-projects --json-file-output=$REPORT_PATH/snyk_report/snyk-report-$PROJECT_NAME-$BUILD_NUMBER.json || true
-
-      - name: Run OWASP ZAP Baseline Scan
+      - name: Create report directories
         run: |
-          sudo docker run -v $(pwd):/zap/wrk/:rw --user root -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t $ZAP_TARGET_URL -r owaspzap-report-$PROJECT_NAME-$BUILD_NUMBER.html || true
-          mv owaspzap-report-$PROJECT_NAME-$BUILD_NUMBER.html $REPORT_PATH/owaspzap_report/
+          mkdir -p $REPORT_PATH/horusec
+          mkdir -p $REPORT_PATH/snyk
+          mkdir -p $REPORT_PATH/owaspzap
+
+      # --------------------
+      # Horusec (SAST)
+      # --------------------
+      - name: Run Horusec (Container)
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/src \
+            -v ${{ github.workspace }}/$REPORT_PATH/horusec:/reports \
+            horuszup/horusec-cli:latest \
+            horusec start \
+              -p /src \
+              -o json \
+              -O /reports/horusec-report-${PROJECT_NAME}-${BUILD_NUMBER}.json || true
+
+      # --------------------
+      # Snyk (SCA)
+      # --------------------
+      - name: Run Snyk (Container)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          docker run --rm \
+            -e SNYK_TOKEN=$SNYK_TOKEN \
+            -v ${{ github.workspace }}:/project \
+            snyk/snyk:docker \
+            snyk test --all-projects \
+              --json-file-output=/project/$REPORT_PATH/snyk/snyk-report-${PROJECT_NAME}-${BUILD_NUMBER}.json || true
+
+      # --------------------
+      # OWASP ZAP (DAST)
+      # --------------------
+      - name: Run OWASP ZAP Baseline
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/$REPORT_PATH/owaspzap:/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t $ZAP_TARGET_URL \
+              -r owaspzap-report-${PROJECT_NAME}-${BUILD_NUMBER}.html || true
 
   upload-defectdojo:
-    name: Upload to DefectDojo
-    runs-on: self-hosted
-    needs: run-horusec
+    name: Upload Reports to DefectDojo
+    runs-on: ubuntu-latest
+    needs: security-scans
+
     env:
       DEFECTDOJO_TOKEN: ${{ secrets.DEFECTDOJO_TOKEN }}
-      DEFECTDOJO_HOST: "http://localhost:8080"
-      PROJECT_NAME: "vamp-api"
-      BUILD_NUMBER: ${{ github.run_number }}
-      PRODUCT_ID: ${{ secrets.DEFECTDOJO_PRODUCT_ID }}
+      DEFECTDOJO_HOST: http://localhost:8080
       ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
+      PROJECT_NAME: stacy-api
+      BUILD_NUMBER: ${{ github.run_number }}
+
     steps:
-      - name: Upload Horusec report
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload Horusec Report
         run: |
-          python3 -c "
-import requests
-url = f'{os.environ["DEFECTDOJO_HOST"]}/api/v2/import-scan/'
-headers = {'Authorization': 'Token ' + os.environ['DEFECTDOJO_TOKEN']}
+          python3 <<EOF
+import requests, os
+
+url = f"{os.environ['DEFECTDOJO_HOST']}/api/v2/import-scan/"
+headers = {"Authorization": "Token " + os.environ["DEFECTDOJO_TOKEN"]}
 payload = {
-    'scan_date': '2025-07-08',
-    'minimum_severity': 'Info',
-    'active': 'true',
-    'verified': 'true',
-    'scan_type': 'Horusec',
-    'engagement': os.environ['ENGAGEMENT_ID']
+  "scan_date": "2025-07-08",
+  "minimum_severity": "Info",
+  "active": "true",
+  "verified": "true",
+  "scan_type": "Horusec",
+  "engagement": os.environ["ENGAGEMENT_ID"]
 }
 files = {
-    'file': (
-        'horusec-report.json',
-        open(f'/home/arkad/Reports/horusec_report/horusec-report-{os.environ["PROJECT_NAME"]}-{os.environ["BUILD_NUMBER"]}.json', 'rb'),
-        'application/json'
-    )
+  "file": open(f"reports/horusec/horusec-report-{os.environ['PROJECT_NAME']}-{os.environ['BUILD_NUMBER']}.json","rb")
 }
-response = requests.post(url, headers=headers, data=payload, files=files)
-print('Horusec Upload:', response.status_code, response.text)
-"
+r = requests.post(url, headers=headers, data=payload, files=files)
+print("Horusec:", r.status_code, r.text)
+EOF
 
-      - name: Upload Snyk report
+      - name: Upload Snyk Report
         run: |
-          python3 -c "
-import requests
-url = f'{os.environ["DEFECTDOJO_HOST"]}/api/v2/import-scan/'
-headers = {'Authorization': 'Token ' + os.environ['DEFECTDOJO_TOKEN']}
+          python3 <<EOF
+import requests, os
+
+url = f"{os.environ['DEFECTDOJO_HOST']}/api/v2/import-scan/"
+headers = {"Authorization": "Token " + os.environ["DEFECTDOJO_TOKEN"]}
 payload = {
-    'scan_date': '2025-07-08',
-    'minimum_severity': 'Info',
-    'active': 'true',
-    'verified': 'true',
-    'scan_type': 'Snyk',
-    'engagement': os.environ['ENGAGEMENT_ID']
+  "scan_date": "2025-07-08",
+  "minimum_severity": "Info",
+  "active": "true",
+  "verified": "true",
+  "scan_type": "Snyk",
+  "engagement": os.environ["ENGAGEMENT_ID"]
 }
 files = {
-    'file': (
-        'snyk-report.json',
-        open(f'/home/arkad/Reports/snyk_report/snyk-report-{os.environ["PROJECT_NAME"]}-{os.environ["BUILD_NUMBER"]}.json', 'rb'),
-        'application/json'
-    )
+  "file": open(f"reports/snyk/snyk-report-{os.environ['PROJECT_NAME']}-{os.environ['BUILD_NUMBER']}.json","rb")
 }
-response = requests.post(url, headers=headers, data=payload, files=files)
-print('Snyk Upload:', response.status_code, response.text)
-"
-
-  clean-up:
-    name: Clean Up
-    runs-on: self-hosted
-    needs: upload-defectdojo
-    if: always()
-    steps:
-      - name: Delete cloned repository
-        run: rm -rf ${{ github.workspace }}
+r = requests.post(url, headers=headers, data=payload, files=files)
+print("Snyk:", r.status_code, r.text)
+EOF
