@@ -67,62 +67,63 @@ jobs:
               -t $ZAP_TARGET_URL \
               -r owaspzap-report-${PROJECT_NAME}-${BUILD_NUMBER}.html || true
 
-  upload-defectdojo:
-    name: Upload Reports to DefectDojo
-    runs-on: ubuntu-latest
-    needs: security-scans
+  # upload-defectdojo:
+  #   name: Upload Reports to DefectDojo
+  #   runs-on: ubuntu-latest
+  #   needs: security-scans
 
-    env:
-      DEFECTDOJO_TOKEN: ${{ secrets.DEFECTDOJO_TOKEN }}
-      DEFECTDOJO_HOST: http://localhost:8080
-      ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
-      PROJECT_NAME: stacy-api
-      BUILD_NUMBER: ${{ github.run_number }}
+  #   env:
+  #     DEFECTDOJO_TOKEN: ${{ secrets.DEFECTDOJO_TOKEN }}
+  #     DEFECTDOJO_HOST: http://localhost:8080
+  #     ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
+  #     PROJECT_NAME: stacy-api
+  #     BUILD_NUMBER: ${{ github.run_number }}
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
 
-      - name: Upload Horusec Report
-        run: |
-          python3 <<EOF
-import requests, os
+  #     - name: Upload Horusec Report
+  #       run: |
+          
+#           python3 <<EOF
+# import requests, os
 
-url = f"{os.environ['DEFECTDOJO_HOST']}/api/v2/import-scan/"
-headers = {"Authorization": "Token " + os.environ["DEFECTDOJO_TOKEN"]}
-payload = {
-  "scan_date": "2025-07-08",
-  "minimum_severity": "Info",
-  "active": "true",
-  "verified": "true",
-  "scan_type": "Horusec",
-  "engagement": os.environ["ENGAGEMENT_ID"]
-}
-files = {
-  "file": open(f"reports/horusec/horusec-report-{os.environ['PROJECT_NAME']}-{os.environ['BUILD_NUMBER']}.json","rb")
-}
-r = requests.post(url, headers=headers, data=payload, files=files)
-print("Horusec:", r.status_code, r.text)
-EOF
+# url = f"{os.environ['DEFECTDOJO_HOST']}/api/v2/import-scan/"
+# headers = {"Authorization": "Token " + os.environ["DEFECTDOJO_TOKEN"]}
+# payload = {
+#   "scan_date": "2025-07-08",
+#   "minimum_severity": "Info",
+#   "active": "true",
+#   "verified": "true",
+#   "scan_type": "Horusec",
+#   "engagement": os.environ["ENGAGEMENT_ID"]
+# }
+# files = {
+#   "file": open(f"reports/horusec/horusec-report-{os.environ['PROJECT_NAME']}-{os.environ['BUILD_NUMBER']}.json","rb")
+# }
+# r = requests.post(url, headers=headers, data=payload, files=files)
+# print("Horusec:", r.status_code, r.text)
+# EOF
 
-      - name: Upload Snyk Report
-        run: |
-          python3 <<EOF
-import requests, os
+#       - name: Upload Snyk Report
+#         run: |
+#           python3 <<EOF
+# import requests, os
 
-url = f"{os.environ['DEFECTDOJO_HOST']}/api/v2/import-scan/"
-headers = {"Authorization": "Token " + os.environ["DEFECTDOJO_TOKEN"]}
-payload = {
-  "scan_date": "2025-07-08",
-  "minimum_severity": "Info",
-  "active": "true",
-  "verified": "true",
-  "scan_type": "Snyk",
-  "engagement": os.environ["ENGAGEMENT_ID"]
-}
-files = {
-  "file": open(f"reports/snyk/snyk-report-{os.environ['PROJECT_NAME']}-{os.environ['BUILD_NUMBER']}.json","rb")
-}
-r = requests.post(url, headers=headers, data=payload, files=files)
-print("Snyk:", r.status_code, r.text)
-EOF
+# url = f"{os.environ['DEFECTDOJO_HOST']}/api/v2/import-scan/"
+# headers = {"Authorization": "Token " + os.environ["DEFECTDOJO_TOKEN"]}
+# payload = {
+#   "scan_date": "2025-07-08",
+#   "minimum_severity": "Info",
+#   "active": "true",
+#   "verified": "true",
+#   "scan_type": "Snyk",
+#   "engagement": os.environ["ENGAGEMENT_ID"]
+# }
+# files = {
+#   "file": open(f"reports/snyk/snyk-report-{os.environ['PROJECT_NAME']}-{os.environ['BUILD_NUMBER']}.json","rb")
+# }
+# r = requests.post(url, headers=headers, data=payload, files=files)
+# print("Snyk:", r.status_code, r.text)
+# EOF
