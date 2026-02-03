@@ -28,5 +28,5 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vampi:latest
+          tags: erev0s/vampi:latest
           platforms: linux/amd64,linux/arm64
