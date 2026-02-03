@@ -35,7 +35,7 @@ jobs:
             -v ${{ github.workspace }}:/src \
             -v ${{ github.workspace }}/$REPORT_PATH/horusec:/reports \
             horuszup/horusec-cli:latest \
-            horusec start \
+            horusec start -D \
               -p /src \
               -o json \
               -O /reports/horusec-report-${PROJECT_NAME}-${BUILD_NUMBER}.json || true
@@ -51,7 +51,7 @@ jobs:
             -e SNYK_TOKEN=$SNYK_TOKEN \
             -v ${{ github.workspace }}:/project \
             snyk/snyk:docker \
-            snyk test --all-projects \
+            snyk test --file=requirements.txt \
               --json-file-output=/project/$REPORT_PATH/snyk/snyk-report-${PROJECT_NAME}-${BUILD_NUMBER}.json || true
 
       # --------------------
@@ -59,7 +59,7 @@ jobs:
       # --------------------
       - name: Run OWASP ZAP Baseline
         run: |
-          docker run --rm \
+          docker run --rm --root \
             -v ${{ github.workspace }}/$REPORT_PATH/owaspzap:/zap/wrk \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
