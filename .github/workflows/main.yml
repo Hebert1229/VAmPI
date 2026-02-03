@@ -59,12 +59,14 @@ jobs:
       # --------------------
       - name: Run OWASP ZAP Baseline
         run: |
-          docker run --rm --root \
+          docker run --rm \
+            --user root \
             -v ${{ github.workspace }}/$REPORT_PATH/owaspzap:/zap/wrk \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
               -t $ZAP_TARGET_URL \
               -r owaspzap-report-${PROJECT_NAME}-${BUILD_NUMBER}.html || true
+
 
   # upload-defectdojo:
   #   name: Upload Reports to DefectDojo
